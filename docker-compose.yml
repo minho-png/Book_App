@@ -1,0 +1,102 @@
+services:
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bookapp}
+      POSTGRES_USER: ${POSTGRES_USER:-bookuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bookpass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bookuser} -d ${POSTGRES_DB:-bookapp}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  # ── Book Service (FastAPI) ──────────────────────────────────────────────────
+  book-service:
+    build:
+      context: ./services/book-service
+    restart: unless-stopped
+    env_file: [ .env ]
+    environment:
+      POSTGRES_URL: postgresql+asyncpg://${POSTGRES_USER:-bookuser}:${POSTGRES_PASSWORD:-bookpass}@db:5432/${POSTGRES_DB:-bookapp}
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [ internal ]
+    expose: [ "8001" ]
+
+  # ── Crawl Service (FastAPI) ─────────────────────────────────────────────────
+  crawl-service:
+    build:
+      context: ./services/crawl-service
+    restart: unless-stopped
+    env_file: [ .env ]
+    environment:
+      POSTGRES_URL: postgresql+asyncpg://${POSTGRES_USER:-bookuser}:${POSTGRES_PASSWORD:-bookpass}@db:5432/${POSTGRES_DB:-bookapp}
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [ internal ]
+    expose: [ "8002" ]
+
+  # ── Recommend Service (FastAPI) ─────────────────────────────────────────────
+  recommend-service:
+    build:
+      context: ./services/recommend-service
+    restart: unless-stopped
+    env_file: [ .env ]
+    environment:
+      POSTGRES_URL: postgresql+asyncpg://${POSTGRES_USER:-bookuser}:${POSTGRES_PASSWORD:-bookpass}@db:5432/${POSTGRES_DB:-bookapp}
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [ internal ]
+    expose: [ "8003" ]
+
+  # ── Gateway (FastAPI) ───────────────────────────────────────────────────────
+  gateway:
+    build:
+      context: ./gateway
+    restart: unless-stopped
+    environment:
+      BOOK_SERVICE_URL: http://book-service:8001
+      CRAWL_SERVICE_URL: http://crawl-service:8002
+      RECOMMEND_SERVICE_URL: http://recommend-service:8003
+    ports:
+      - "80:80"
+    depends_on:
+      - book-service
+      - crawl-service
+      - recommend-service
+    networks:
+      - internal
+      - external
+
+  # ── Frontend (Next.js) ──────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:80}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - gateway
+    networks:
+      - external
+    profiles: [ frontend ]
+
+volumes:
+  postgres_data:
+
+
+networks:
+  internal:
+    driver: bridge
+    internal: true
+  external:
+    driver: bridge
