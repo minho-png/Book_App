@@ -26,21 +26,9 @@ interface TrendingBook {
   store: string
 }
 
-const chatHistory: ChatHistory[] = [
-  { id: "1", title: "2026년 상반기 베스트셀러", date: "오늘" },
-  { id: "2", title: "자기계발 도서 추천", date: "어제" },
-  { id: "3", title: "SF 소설 추천받기", date: "2일 전" },
-  { id: "4", title: "경제/경영 신간 분석", date: "3일 전" },
-  { id: "5", title: "어린이 도서 추천", date: "1주 전" },
-]
+const chatHistory: ChatHistory[] = []
 
-const trendingBooks: TrendingBook[] = [
-  { rank: 1, title: "불편한 편의점 4", author: "김호연", store: "교보문고" },
-  { rank: 2, title: "세이노의 가르침", author: "세이노", store: "알라딘" },
-  { rank: 3, title: "트렌드 코리아 2026", author: "김난도", store: "교보문고" },
-  { rank: 4, title: "역행자", author: "자청", store: "밀리의서재" },
-  { rank: 5, title: "아버지의 해방일지", author: "정지아", store: "알라딘" },
-]
+const trendingBooks: TrendingBook[] = []
 
 const storeTagColor: Record<string, string> = {
   "교보문고": "text-[#C4956A]",
@@ -86,7 +74,7 @@ export function ChatSidebar({ isOpen, onClose }: ChatSidebarProps) {
           opacity: isOpen ? 1 : 0,
         }}
         transition={{ type: "spring", damping: 25, stiffness: 200 }}
-        className="fixed left-0 top-0 bottom-0 z-50 w-[300px] flex flex-col backdrop-blur-xl bg-[rgba(255,255,255,0.65)] border-r border-border/50 shadow-xl lg:relative lg:z-auto"
+        className="fixed left-0 top-0 bottom-0 z-50 w-[300px] flex flex-col backdrop-blur-xl bg-[rgba(255,255,255,0.65)] border-r border-border/50 shadow-xl"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border/50">
