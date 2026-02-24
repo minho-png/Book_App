@@ -102,5 +102,5 @@ export function useStream() {
         setMessages([])
     }, [])
 
-    return { messages, isLoading, sendMessage, clearMessages }
+    return { messages, setMessages, isLoading, sendMessage, clearMessages }
 }

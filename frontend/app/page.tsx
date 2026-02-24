@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Menu, BookOpen, Sparkles } from "lucide-react"
 import { ChatInput } from "@/components/chat-input"
@@ -17,12 +17,67 @@ const suggestedQuestions = [
 
 export default function BookCuratorPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { messages, isLoading, sendMessage } = useStream()
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  const { messages, setMessages, isLoading, sendMessage } = useStream()
+
+  // Load session from localStorage
+  const handleSelectSession = (sessionId: string) => {
+    const saved = localStorage.getItem(`book_curator_session_${sessionId}`)
+    if (saved) {
+      try {
+        setMessages(JSON.parse(saved))
+        setCurrentSessionId(sessionId)
+      } catch (e) {
+        console.error("Failed to load session", e)
+      }
+    }
+  }
+
+  const handleNewChat = () => {
+    setMessages([])
+    setCurrentSessionId(null)
+  }
+
+  // Auto-save and history management
+  useEffect(() => {
+    if (messages.length === 0) return
+
+    let sessionId = currentSessionId
+    if (!sessionId) {
+      // Create new session entry
+      sessionId = Date.now().toString()
+      const title = messages[0].role === 'user'
+        ? messages[0].content.slice(0, 25) + (messages[0].content.length > 25 ? "..." : "")
+        : "새로운 대화"
+
+      const newSession = {
+        id: sessionId,
+        title,
+        date: new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      }
+
+      const history = JSON.parse(localStorage.getItem("book_curator_history") || "[]")
+      localStorage.setItem("book_curator_history", JSON.stringify([newSession, ...history]))
+      setCurrentSessionId(sessionId)
+
+      // Dispatch storage event to update sidebar in same tab
+      window.dispatchEvent(new Event('storage'))
+    }
+
+    // Save current messages
+    localStorage.setItem(`book_curator_session_${sessionId}`, JSON.stringify(messages))
+  }, [messages, currentSessionId])
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
       {/* Sidebar */}
-      <ChatSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <ChatSidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        onSelectSession={handleSelectSession}
+        onNewChat={handleNewChat}
+        currentSessionId={currentSessionId}
+      />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">

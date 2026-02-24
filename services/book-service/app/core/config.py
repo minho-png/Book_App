@@ -5,7 +5,7 @@ import json
 
 class Settings(BaseSettings):
     # Database
-    POSTGRES_URL: str = "postgresql+asyncpg://bookuser:bookpass@localhost:5432/bookapp"
+    POSTGRES_URL: str = "postgresql+asyncpg://bookuser:bookpass@db:5432/bookapp"
     DEBUG: bool = False
 
     # Google Gemini LLM

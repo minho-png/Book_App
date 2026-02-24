@@ -5,12 +5,12 @@ RUN apt-get update && apt-get install -y \
     chromium \
     chromium-driver \
     libnss3 \
-    libgconf-2-4 \
     libasound2 \
     libxtst6 \
     libxss1 \
     libatk-bridge2.0-0 \
     libgtk-3-0 \
+    libgbm1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
