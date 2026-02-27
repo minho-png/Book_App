@@ -36,8 +36,26 @@ async def get_db() -> AsyncSession:
             await session.close()
 
 
+import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
+
 async def init_db():
-    """Create all tables on startup."""
-    async with engine.begin() as conn:
-        from app.models import book  # noqa: F401 - registers models
-        await conn.run_sync(Base.metadata.create_all)
+    """Create all tables on startup with retry logic."""
+    max_retries = 5
+    retry_delay = 5
+    
+    for attempt in range(1, max_retries + 1):
+        try:
+            async with engine.begin() as conn:
+                from app.models import book  # noqa: F401 - registers models
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("✅ Database initialized successfully.")
+            return
+        except Exception as e:
+            if attempt == max_retries:
+                logger.error(f"❌ Failed to initialize database after {max_retries} attempts: {e}")
+                raise
+            logger.warning(f"⚠️ Database initialization attempt {attempt} failed. Retrying in {retry_delay}s... Error: {e}")
+            await asyncio.sleep(retry_delay)
