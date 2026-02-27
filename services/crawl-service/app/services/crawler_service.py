@@ -51,6 +51,8 @@ def _build_chrome_driver() -> webdriver.Chrome:
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--disable-gpu")
+    opts.add_argument("--disable-software-rasterizer")
+    opts.add_argument("--remote-debugging-port=9222")
     opts.add_argument("--window-size=1920,1080")
     opts.add_argument(
         "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -61,7 +63,18 @@ def _build_chrome_driver() -> webdriver.Chrome:
     opts.add_experimental_option("excludeSwitches", ["enable-automation"])
     opts.add_experimental_option("useAutomationExtension", False)
 
-    service = Service(ChromeDriverManager().install())
+    # Docker 환경 등에서 시스템 chromedriver를 우선 사용하도록 설정
+    chromedriver_path = "/usr/bin/chromedriver"
+    if not os.path.exists(chromedriver_path):
+        chromedriver_path = "/usr/local/bin/chromedriver"
+        
+    if os.path.exists(chromedriver_path):
+        logger.info(f"Using system chromedriver: {chromedriver_path}")
+        service = Service(executable_path=chromedriver_path)
+    else:
+        logger.info("System chromedriver not found. Installing via ChromeDriverManager...")
+        service = Service(ChromeDriverManager().install())
+    
     driver = webdriver.Chrome(service=service, options=opts)
     driver.execute_cdp_cmd(
         "Page.addScriptToEvaluateOnNewDocument",
