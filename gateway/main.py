@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from pydantic_settings import BaseSettings
 import httpx
 import os
 import logging
@@ -9,21 +10,31 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("gateway")
 
+class Settings(BaseSettings):
+    # 서비스 URL 설정 (환경변수 또는 로컬 기본값)
+    BOOK_SERVICE_URL: str = "http://book-service:8001"
+    CRAWL_SERVICE_URL: str = "http://crawl-service:8002"
+    RECOMMEND_SERVICE_URL: str = "http://recommend-service:8003"
+    
+    # CORS 설정
+    BACKEND_CORS_ORIGINS: list[str] = ["*"]
+
+    class Config:
+        env_file = ".env"
+        extra = "ignore"
+
+settings = Settings()
+
 app = FastAPI(title="BookCurator Gateway")
 
 #── CORS 설정 (시스템의 유일한 CORS 권위자) ──────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # 실제 운영환경에서는 Vercel URL 등으로 제한 권장
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
-
-#── 서비스 URL 설정 (환경변수 또는 로컬 기본값) ────────────────
-BOOK_SERVICE_URL = os.getenv("BOOK_SERVICE_URL", "http://localhost:8001")
-CRAWL_SERVICE_URL = os.getenv("CRAWL_SERVICE_URL", "http://localhost:8002")
-RECOMMEND_SERVICE_URL = os.getenv("RECOMMEND_SERVICE_URL", "http://localhost:8003")
 
 @app.get("/health")
 async def health():
@@ -32,13 +43,13 @@ async def health():
 def get_target_url(path: str):
     """경로에 따라 대상 서비스 URL을 결정합니다."""
     if path.startswith("api/books"):
-        return f"{BOOK_SERVICE_URL}/{path}"
+        return f"{settings.BOOK_SERVICE_URL}/{path}"
     elif path.startswith("api/crawl"):
-        return f"{CRAWL_SERVICE_URL}/{path}"
+        return f"{settings.CRAWL_SERVICE_URL}/{path}"
     elif path.startswith("api/recommend"):
-        return f"{RECOMMEND_SERVICE_URL}/{path}"
+        return f"{settings.RECOMMEND_SERVICE_URL}/{path}"
     # 기본값
-    return f"{BOOK_SERVICE_URL}/{path}"
+    return f"{settings.BOOK_SERVICE_URL}/{path}"
 
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 async def proxy(request: Request, path: str):
@@ -69,7 +80,3 @@ async def proxy(request: Request, path: str):
         stream_backend(),
         media_type="application/x-ndjson" if "recommend" in path else "application/json"
     )
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=80)
