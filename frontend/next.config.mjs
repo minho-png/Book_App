@@ -12,14 +12,6 @@ const nextConfig = {
       { protocol: 'https', hostname: '*.millie.co.kr' },
     ],
   },
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:80'}/api/:path*`,
-      },
-    ]
-  },
 }
 
 export default nextConfig
