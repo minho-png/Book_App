@@ -10,6 +10,7 @@ import {
   X,
   Settings,
   Key,
+  Check,
 } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useState, useEffect, useCallback } from "react"
@@ -36,6 +37,7 @@ export function ChatSidebar({
   currentSessionId
 }: ChatSidebarProps) {
   const [apiKey, setApiKey] = useState("")
+  const [isSaved, setIsSaved] = useState(false)
   const [history, setHistory] = useState<ChatSession[]>([])
 
   const loadHistory = useCallback(() => {
@@ -66,9 +68,10 @@ export function ChatSidebar({
     return () => window.removeEventListener("storage", handleStorageChange)
   }, [loadHistory])
 
-  const handleApiKeyChange = (val: string) => {
-    setApiKey(val)
-    localStorage.setItem("google_api_key", val)
+  const handleSaveApiKey = () => {
+    localStorage.setItem("google_api_key", apiKey)
+    setIsSaved(true)
+    setTimeout(() => setIsSaved(false), 2000)
   }
 
   const deleteSession = (e: React.MouseEvent, id: string) => {
@@ -155,8 +158,8 @@ export function ChatSidebar({
                         onClose()
                       }}
                       className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-all group ${currentSessionId === chat.id
-                          ? "bg-accent/15 text-accent"
-                          : "hover:bg-muted/60 text-foreground"
+                        ? "bg-accent/15 text-accent"
+                        : "hover:bg-muted/60 text-foreground"
                         }`}
                     >
                       <div className="flex flex-col min-w-0 flex-1 mr-2">
@@ -195,15 +198,33 @@ export function ChatSidebar({
               <Key className="h-3 w-3" />
               Google Gemini API Key
             </label>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => handleApiKeyChange(e.target.value)}
-              placeholder="API Key 입력"
-              className="w-full px-3 py-2 rounded-xl bg-background border border-border/80 text-[12px] focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-all placeholder:text-muted-foreground/50"
-            />
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="API Key 입력"
+                className="flex-1 px-3 py-2 rounded-xl bg-background border border-border/80 text-[12px] focus:outline-none focus:border-accent transition-all placeholder:text-muted-foreground/50"
+              />
+              <button
+                onClick={handleSaveApiKey}
+                className={`px-3 py-2 rounded-xl text-[12px] font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${isSaved
+                  ? "bg-green-500/10 text-green-500 border border-green-500/20"
+                  : "bg-accent text-accent-foreground hover:opacity-90"
+                  }`}
+              >
+                {isSaved ? (
+                  <>
+                    <Check className="h-3.5 w-3.5" />
+                    <span>저장됨</span>
+                  </>
+                ) : (
+                  "저장"
+                )}
+              </button>
+            </div>
             <p className="text-[10px] text-muted-foreground/70 leading-relaxed px-1">
-              * API Key는 브라우저 로컬 저장소에만 안전하게 보관됩니다.
+              * 버튼을 눌러야 브라우저에 안전하게 보관됩니다.
             </p>
           </div>
         </div>
