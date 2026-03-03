@@ -5,7 +5,7 @@ JSON 스트리밍 응답 생성
 """
 import json
 import logging
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 import google.generativeai as genai
 from google.generativeai.types import GenerationConfig

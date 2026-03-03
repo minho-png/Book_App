@@ -1,6 +1,8 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from pydantic import field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 import httpx
 import os
@@ -18,6 +20,16 @@ class Settings(BaseSettings):
     
     # CORS 설정
     BACKEND_CORS_ORIGINS: list[str] = ["*"]
+
+    @field_validator("BACKEND_CORS_ORIGINS", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: str | list[str]) -> list[str] | str:
+        if isinstance(v, str) and not v.startswith("["):
+            return [i.strip() for i in v.split(",")]
+        elif isinstance(v, str) and v.startswith("["):
+            import json
+            return json.loads(v)
+        return v
 
     class Config:
         env_file = ".env"
