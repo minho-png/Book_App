@@ -5,6 +5,7 @@ Crawler Service - Selenium + ChromeDriver (headless) 기반
 import asyncio
 import logging
 import time
+import os
 from datetime import datetime
 from typing import Optional
 
