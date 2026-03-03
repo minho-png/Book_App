@@ -84,6 +84,18 @@ def _build_chrome_driver() -> webdriver.Chrome:
     return driver
 
 
+def _scroll_to_bottom(driver):
+    """지연 로딩된 이미지를 위해 페이지 끝까지 스크롤."""
+    last_height = driver.execute_script("return document.body.scrollHeight")
+    while True:
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(1)
+        new_height = driver.execute_script("return document.body.scrollHeight")
+        if new_height == last_height:
+            break
+        last_height = new_height
+
+
 def _safe_find(driver, by: By, selector: str, timeout: int = 10) -> Optional[object]:
     """None 반환하는 safe WebDriverWait 래퍼."""
     try:
@@ -101,15 +113,19 @@ def _crawl_kyobo_sync() -> list[dict]:
     driver = _build_chrome_driver()
     books: list[dict] = []
     try:
-        url = "https://www.kyobobook.co.kr/bestSellerNew/bestseller.laf?mallGb=KOR&orderClick=DAa"
+        # 최신 URL로 업데이트
+        url = "https://product.kyobobook.co.kr/bestseller/online"
         driver.get(url)
-        time.sleep(settings.CRAWL_DELAY_SECONDS)
+        time.sleep(settings.CRAWL_DELAY_SECONDS + 2)
+        
+        # 스크롤하여 이미지 로드 유도
+        _scroll_to_bottom(driver)
 
-        wait = WebDriverWait(driver, 15)
+        wait = WebDriverWait(driver, 20)
         try:
             items = wait.until(
                 EC.presence_of_all_elements_located(
-                    (By.CSS_SELECTOR, "ul.list_type01 li.list_item")
+                    (By.CSS_SELECTOR, "li.prod_item")
                 )
             )
         except TimeoutException:
@@ -118,20 +134,23 @@ def _crawl_kyobo_sync() -> list[dict]:
 
         for rank, item in enumerate(items[:20], start=1):
             try:
-                title_el = item.find_element(By.CSS_SELECTOR, ".title strong")
-                author_el = item.find_element(By.CSS_SELECTOR, ".author")
+                # 새 사이트 구조에 맞춘 셀렉터
+                title_el = item.find_element(By.CSS_SELECTOR, ".prod_name, a.prod_info")
+                author_el = item.find_element(By.CSS_SELECTOR, ".prod_author")
                 title = title_el.text.strip()
-                author = author_el.text.strip().split(" 지음")[0]
+                author = author_el.text.strip().split(" ·")[0] # 저자 정보 분리
 
                 try:
-                    genre_el = item.find_element(By.CSS_SELECTOR, ".category")
+                    genre_el = item.find_element(By.CSS_SELECTOR, ".prod_category")
                     genre = GENRE_MAP.get(genre_el.text.strip(), genre_el.text.strip())
                 except NoSuchElementException:
                     genre = "종합"
 
                 try:
-                    img_el = item.find_element(By.CSS_SELECTOR, "img")
+                    img_el = item.find_element(By.CSS_SELECTOR, ".prod_thumb_box img")
                     image_url = img_el.get_attribute("src")
+                    # data-src 속성이 있는 경우 우선 사용
+                    image_url = img_el.get_attribute("data-src") or image_url
                 except NoSuchElementException:
                     image_url = None
 
@@ -145,7 +164,6 @@ def _crawl_kyobo_sync() -> list[dict]:
                     "store": "kyobo",
                     "category": "종합 베스트셀러",
                 })
-                time.sleep(0.3)
             except Exception as e:
                 logger.debug(f"[kyobo] item 파싱 실패: {e}")
                 continue
@@ -165,9 +183,11 @@ def _crawl_aladdin_sync() -> list[dict]:
     try:
         url = "https://www.aladin.co.kr/shop/common/wbest.aspx?BestType=Bestseller&BranchType=1&CID=0&cnt=20&SortOrder=1"
         driver.get(url)
-        time.sleep(settings.CRAWL_DELAY_SECONDS)
+        time.sleep(settings.CRAWL_DELAY_SECONDS + 1)
+        
+        _scroll_to_bottom(driver)
 
-        wait = WebDriverWait(driver, 15)
+        wait = WebDriverWait(driver, 20)
         try:
             items = wait.until(
                 EC.presence_of_all_elements_located(
@@ -180,25 +200,24 @@ def _crawl_aladdin_sync() -> list[dict]:
 
         for rank, item in enumerate(items[:20], start=1):
             try:
+                # 정교한 셀렉터로 업데이트
                 title_el = item.find_element(By.CSS_SELECTOR, "a.bo3")
-                author_el = item.find_element(By.CSS_SELECTOR, "span.ss_f_g2_3")
+                # 저자 링크가 여러개일 수 있으므로 AuthorSearch 포함된 링크 활용
+                author_els = item.find_elements(By.CSS_SELECTOR, "a[href*='AuthorSearch']")
                 title = title_el.text.strip()
-                author = author_el.text.strip().split(" |")[0]
+                author = author_els[0].text.strip() if author_els else "저자 미상"
 
                 try:
-                    rating_el = item.find_element(By.CSS_SELECTOR, "span.CoverStarBasic")
-                    rating = float(rating_el.text.strip())
-                except (NoSuchElementException, ValueError):
-                    rating = None
-
-                try:
-                    desc_el = item.find_element(By.CSS_SELECTOR, "div.ss_f_g2_2")
-                    description = desc_el.text.strip()
+                    # 첫 번째 li 태그의 텍스트에서 카테고리 추출 시도
+                    category_el = item.find_element(By.CSS_SELECTOR, "div.ss_book_list ul li")
+                    genre_text = category_el.text.strip()
+                    genre = genre_text.split("]")[0].replace("[", "") if "]" in genre_text else "종합"
+                    genre = GENRE_MAP.get(genre, genre)
                 except NoSuchElementException:
-                    description = None
+                    genre = "종합"
 
                 try:
-                    img_el = item.find_element(By.CSS_SELECTOR, "img")
+                    img_el = item.find_element(By.CSS_SELECTOR, "img.front_cover")
                     image_url = img_el.get_attribute("src")
                 except NoSuchElementException:
                     image_url = None
@@ -206,16 +225,13 @@ def _crawl_aladdin_sync() -> list[dict]:
                 books.append({
                     "title": title,
                     "author": author,
-                    "genre": "종합",
-                    "rating": rating,
-                    "description": description,
+                    "genre": genre,
                     "cover_color": STORE_COLORS["aladdin"],
                     "image_url": image_url,
                     "rank": rank,
                     "store": "aladdin",
                     "category": "주간 베스트",
                 })
-                time.sleep(0.3)
             except Exception as e:
                 logger.debug(f"[aladdin] item 파싱 실패: {e}")
                 continue
@@ -233,68 +249,49 @@ def _crawl_millie_sync() -> list[dict]:
     driver = _build_chrome_driver()
     books: list[dict] = []
     try:
-        # 사용자 요청 URL로 업데이트
         url = "https://www.millie.co.kr/v3/today/more/best/bookstore/total"
         driver.get(url)
-        time.sleep(settings.CRAWL_DELAY_SECONDS + 2)   # JS 렌더링 대기 시간 증가
+        # JS 렌더링 및 페이지 구성 대기
+        time.sleep(settings.CRAWL_DELAY_SECONDS + 3)
+        _scroll_to_bottom(driver)
 
-        wait = WebDriverWait(driver, 20)
+        wait = WebDriverWait(driver, 25)
         try:
-            # v3 리스트 페이지의 아이템 셀렉터 (일반적인 패턴: div.book-list-item or li)
-            # Millie v3는 보통 div나 li 내부에 정보를 담음
+            # v3 그리드 리스트 아이템
             items = wait.until(
                 EC.presence_of_all_elements_located(
-                    (By.CSS_SELECTOR, "li") # 혹은 클래스명이 바뀔 수 있으므로 범용적인 li 시도 후 필터링
+                    (By.CSS_SELECTOR, "div.book-list li")
                 )
             )
         except TimeoutException:
             logger.warning("[millie] 상품 목록을 찾지 못했습니다.")
             return books
 
-    # v3 리스트 페이지 특징에 맞춰 파싱 로직 강화
-        found_count = 0
-        for item in items:
-            if found_count >= 20: break
+        for rank, item in enumerate(items[:20], start=1):
             try:
-                # v3에서는 p.title, p.author 또는 .title, .author 클래스 사용
-                # 여러 시퀀스를 시도하여 유연하게 대응
-                title = None
-                author = None
+                # Millie v3 메타데이터 추출 (Title: 뒤에서 2번째 p, Author: 마지막 p)
+                meta_els = item.find_elements(By.CSS_SELECTOR, "a.book-data p")
+                if len(meta_els) < 2: continue
                 
-                for selector in [".title", ".book-title", "p.title", "strong"]:
-                    try:
-                        title_el = item.find_element(By.CSS_SELECTOR, selector)
-                        title = title_el.text.strip()
-                        if title: break
-                    except NoSuchElementException: continue
-                
-                if not title: continue # 제목 없으면 넘김
-
-                for selector in [".author", ".book-author", "p.author", "span.author"]:
-                    try:
-                        author_el = item.find_element(By.CSS_SELECTOR, selector)
-                        author = author_el.text.strip()
-                        if author: break
-                    except NoSuchElementException: continue
+                title = meta_els[-2].text.strip()
+                author = meta_els[-1].text.strip()
 
                 try:
-                    img_el = item.find_element(By.CSS_SELECTOR, "img")
+                    img_el = item.find_element(By.CSS_SELECTOR, "a.book-cover-link img")
                     image_url = img_el.get_attribute("src")
                 except NoSuchElementException:
                     image_url = None
 
                 books.append({
                     "title": title,
-                    "author": author or "저자 미상",
+                    "author": author,
                     "genre": "종합",
                     "cover_color": STORE_COLORS["millie"],
                     "image_url": image_url,
-                    "rank": found_count + 1,
+                    "rank": rank,
                     "store": "millie",
                     "category": "베스트셀러",
                 })
-                found_count += 1
-                time.sleep(0.1)
             except Exception as e:
                 logger.debug(f"[millie] item 파싱 실패: {e}")
                 continue
